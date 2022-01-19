@@ -1,0 +1,3 @@
+prevMonth=$( date --date="2 month ago" +%b )
+//Screenshots is the folder name
+find $WORKSPACE/ScreenShots -type d -name *$prevMonth* -exec rm -r {} \; -prune
