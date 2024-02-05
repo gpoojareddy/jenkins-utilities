@@ -1,0 +1,12 @@
+def q = Jenkins.instance.queue
+
+//Find items in queue that match <project name>
+def queue = q.items.findAll { it.task.name.startsWith('OCI_All_Customers_CCM_ACX-JED_Retry') }
+
+//get all jobs id to list
+def queue_list = []
+queue.each { queue_list.add(it.getId()) }
+
+//sort id's, remove last one - in order to keep the newest job, cancel the rest
+//Note : We can also restrict upto 'N' number of build queue instead of 1
+queue_list.sort().take(queue_list.size() - 1).each { q.doCancelItem(it) }
