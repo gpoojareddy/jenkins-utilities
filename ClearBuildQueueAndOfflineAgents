@@ -1,0 +1,52 @@
+import hudson.model.*
+import jenkins.model.Jenkins
+
+// Access the job prefix and threshold from the build parameters
+def jobPrefix = build.buildVariableResolver.resolve("jobPrefix")
+def threshold = build.buildVariableResolver.resolve("threshold").toInteger()
+def q = Jenkins.instance.queue
+
+def matchingItems = q.items.findAll { it.task.name.startsWith(jobPrefix) }
+
+if (matchingItems.size() > threshold) {
+    println("More than ${threshold} jobs found with prefix '${jobPrefix}'. Cancelling matching jobs.")
+    matchingItems.each { 
+        println("Cancelling: ${it.task.name}")
+        try {
+            q.cancel(it)
+        } catch (Exception e) {
+            println("Failed to cancel job '${it.task.name}': ${e.message}")
+        }
+    }
+} else {
+    println("Less than or equal to ${threshold} jobs found with prefix '${jobPrefix}'. Checking for jobs with offline agents.")
+
+    def offlineAgentJobs = matchingItems.findAll { item ->
+        def task = item.task
+        def assignedLabel = task.assignedLabel
+
+        // Check if the assigned label is associated with an offline agent
+        if (assignedLabel) {
+            def nodes = assignedLabel.getNodes()
+            def offlineNodes = nodes.findAll { node -> 
+                def computer = node.toComputer()
+                computer && !computer.isOnline()
+            }
+            return offlineNodes.size() > 0
+        }
+        return false
+    }
+
+    if (offlineAgentJobs) {
+        offlineAgentJobs.each { item ->
+            println("Job '${item.task.name}' is associated with an offline agent. Cancelling.")
+            try {
+                q.cancel(item)
+            } catch (Exception e) {
+                println("Failed to cancel job '${item.task.name}': ${e.message}")
+            }
+        }
+    } else {
+        println("No jobs associated with offline agents were found.")
+    }
+}
