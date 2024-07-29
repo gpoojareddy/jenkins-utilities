@@ -1,0 +1,41 @@
+import jenkins.model.Jenkins
+import hudson.model.Job
+import hudson.model.Run
+import com.cloudbees.hudson.plugins.folder.AbstractFolder
+
+def jenkinsInstance = Jenkins.instance
+
+def processJob(job) {
+    def jobFullName = job.getFullName()
+    if (jobFullName.startsWith("JobPrefix")) {
+        def build = job.getLastBuild()
+        if (build != null && build.isBuilding()) {
+            def currentDuration = System.currentTimeMillis() - build.getTimeInMillis()
+            println "Job: ${jobFullName} - Current Build Duration: ${currentDuration / 1000 / 60} minutes"
+            if (currentDuration > 1800000) {
+                println "Aborting Job: ${jobFullName} - Current Build Duration: ${currentDuration / 1000 / 60} minutes"
+                build.doStop()  // Aborts the build
+                build.setResult(Result.ABORTED)  // Mark the build as aborted
+            }else{
+               print "Not running more than 30 mins. Skipping!"
+               println ""
+            }
+        }
+    }
+}
+
+def processItem(item) {
+    if (item instanceof Job) {
+        processJob(item)
+    } else if (item instanceof AbstractFolder) {
+        item.getItems().each { subItem ->
+            processItem(subItem)
+        }
+    }
+}
+
+jenkinsInstance.getAllItems().each { item ->
+    processItem(item)
+}
+
+return null
