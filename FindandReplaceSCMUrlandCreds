@@ -1,0 +1,61 @@
+import hudson.plugins.git.*
+import jenkins.*
+import jenkins.model.*
+
+def modifyGitUrl(url) {
+  	def newurl
+	def reposMap = [
+		"<oldURLToBeReplaced>": "<NewURL>"
+	]
+	try {
+		newurl = url.replace(url,reposMap[url])
+	} catch(Exception e) {
+		newurl = url
+	}
+  return newurl
+}
+
+def modifyGitCreds(oldurl,newurl,creds) {
+  	def newcreds
+	if (oldurl != newurl) {
+		newcreds = "<Credentials_ID>"
+	} else {
+		newcreds = creds
+	}
+  return newcreds
+}
+
+Jenkins.instance.getAllItems(AbstractItem.class).each { it ->
+	if (it.class.toString().contains("WorkflowJob")) {
+		def flowDefinition = it.getDefinition()
+        if (flowDefinition instanceof org.jenkinsci.plugins.workflow.cps.CpsScmFlowDefinition) {
+			def scmDefinition = (org.jenkinsci.plugins.workflow.cps.CpsScmFlowDefinition) flowDefinition
+			def scm = scmDefinition.getScm()
+			if (scm instanceof GitSCM) {
+				def oldScm = scm
+				def newUserRemoteConfigs = oldScm.userRemoteConfigs.collect {
+					new UserRemoteConfig(modifyGitUrl(it.url), it.name, it.refspec, modifyGitCreds(it.url,modifyGitUrl(it.url),it.getCredentialsId()))
+				}
+				def newScm = new GitSCM(newUserRemoteConfigs, oldScm.branches, oldScm.doGenerateSubmoduleConfigurations,
+							oldScm.submoduleCfg, oldScm.browser, oldScm.gitTool, oldScm.extensions)
+				it.setDefinition(new org.jenkinsci.plugins.workflow.cps.CpsScmFlowDefinition(newScm, scmDefinition.getScriptPath()))
+				it.save()
+				println("Job Name: '${it.name}' and the Clone URL is: '${scmDefinition.getScm().userRemoteConfigs.url}'")
+			}
+        } else {
+          	println "Job '${it.name}' is a Pipeline job but does not use SCM for its definition."
+        }
+	} else if (it.class.toString().contains("FreeStyleProject")) {
+      	if (it.scm instanceof GitSCM) {
+    		def oldScm = it.scm
+    		def newUserRemoteConfigs = oldScm.userRemoteConfigs.collect {
+      			new UserRemoteConfig(modifyGitUrl(it.url), it.name, it.refspec, modifyGitCreds(it.url,modifyGitUrl(it.url),it.getCredentialsId()))
+    		}
+    		def newScm = new GitSCM(newUserRemoteConfigs, oldScm.branches, oldScm.doGenerateSubmoduleConfigurations,
+                            oldScm.submoduleCfg, oldScm.browser, oldScm.gitTool, oldScm.extensions)
+    		it.scm = newScm 
+    		it.save()
+			println("Job Name: '${it.name}' and the Clone URL is: '${it.scm.userRemoteConfigs.url}'")
+  		}
+  	}	 
+}
